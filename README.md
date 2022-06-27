@@ -1,6 +1,6 @@
 # MolR
 
-I have so far replicated and experimented with basic stuff such as pooling layers(results not shown) and hyperparameters in [this notebook](https://github.com/Chokerino/MolR/blob/master/work.ipynb). Thinking about what can I do next.
+I have so far replicated and experimented with basic stuff such as pooling layers(results not shown) and hyperparameters in [this notebook](https://github.com/Chokerino/MolR/blob/master/work.ipynb). I am using only 50% of the training data due to memory constraints. Thinking about what can I do next.
 <hr style="border:4px solid gray">
 
 This repository is the PyTorch implementation of MolR ([paper](https://openreview.net/forum?id=6sh3pIzKS-)):
