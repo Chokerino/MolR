@@ -1,5 +1,8 @@
 # MolR
 
+I have so far replicated and experimented with basic stuff such as pooling layers(results not shown) and hyperparameters in [this notebook](https://github.com/Chokerino/MolR/blob/master/work.ipynb). Thinking about what can I do next.
+<hr style="border:4px solid gray">
+
 This repository is the PyTorch implementation of MolR ([paper](https://openreview.net/forum?id=6sh3pIzKS-)):
 > Chemical-Reaction-Aware Molecule Representation Learning  
 Hongwei Wang, Weijiang Li, Xiaomeng Jin, Kyunghyun Cho, Heng Ji, Jiawei Han, Martin Burke  
