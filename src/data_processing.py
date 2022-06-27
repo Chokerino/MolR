@@ -4,13 +4,13 @@ import torch
 import pickle
 import pysmiles
 from collections import defaultdict
-
+import numpy as np
 
 attribute_names = ['element', 'charge', 'aromatic', 'hcount']
 
 
 class SmilesDataset(dgl.data.DGLDataset):
-    def __init__(self, args, mode, feature_encoder=None, raw_graphs=None):
+    def __init__(self, args, mode, feature_encoder=None, raw_graphs=None, to_load=False):
         self.args = args
         self.mode = mode
         self.feature_encoder = feature_encoder
@@ -18,6 +18,8 @@ class SmilesDataset(dgl.data.DGLDataset):
         self.path = '../data/' + self.args.dataset + '/cache/' + self.mode
         self.reactant_graphs = []
         self.product_graphs = []
+        #if to_load:
+        #    self.load()
         super().__init__(name='Smiles_' + mode)
 
     def to_gpu(self):
@@ -50,7 +52,8 @@ class SmilesDataset(dgl.data.DGLDataset):
             product_graph = networkx_to_dgl(raw_product_graph, self.feature_encoder)
             self.reactant_graphs.append(reactant_graph)
             self.product_graphs.append(product_graph)
-        self.to_gpu()
+        #self.save()
+        #self.to_gpu()
 
     def has_cache(self):
         return os.path.exists(self.path + '_reactant_graphs.bin') and os.path.exists(self.path + '_product_graphs.bin')
@@ -94,38 +97,75 @@ def read_data(dataset, mode):
     all_values = defaultdict(set)
     graphs = []
 
-    with open(path) as f:
-        for line in f.readlines():
-            idx, product_smiles, reactant_smiles, _ = line.strip().split(',')
+    if mode == "train":
+        with open(path) as f:
+            f = np.array(f.readlines())
+            indices = np.random.choice(f.shape[0], int(0.5*f.shape[0]), replace=False) #Randomly choose 50% of the training data
+            print(len(f), len(indices))
+            for n, line in enumerate(f[indices]):
+                idx, product_smiles, reactant_smiles, _ = line.strip().split(',')
 
-            # skip the first line
-            if len(idx) == 0:
-                continue
+                # skip the first line
+                if len(idx) == 0:
+                    continue
 
-            if int(idx) % 10000 == 0:
-                print('%dk' % (int(idx) // 1000))
+                if int(n) % 10000 == 0:
+                    print('%dk' % (int(n) // 1000))
 
-            # pysmiles.read_smiles() will raise a ValueError: "The atom [se] is malformatted" on USPTO-479k dataset.
-            # This is because "Se" is in a aromatic ring, so in USPTO-479k, "Se" is transformed to "se" to satisfy
-            # SMILES rules. But pysmiles does not treat "se" as a valid atom and raise a ValueError. To handle this
-            # case, I transform all "se" to "Se" in USPTO-479k.
-            if '[se]' in reactant_smiles:
-                reactant_smiles = reactant_smiles.replace('[se]', '[Se]')
-            if '[se]' in product_smiles:
-                product_smiles = product_smiles.replace('[se]', '[Se]')
+                # pysmiles.read_smiles() will raise a ValueError: "The atom [se] is malformatted" on USPTO-479k dataset.
+                # This is because "Se" is in a aromatic ring, so in USPTO-479k, "Se" is transformed to "se" to satisfy
+                # SMILES rules. But pysmiles does not treat "se" as a valid atom and raise a ValueError. To handle this
+                # case, I transform all "se" to "Se" in USPTO-479k.
+                if '[se]' in reactant_smiles:
+                    reactant_smiles = reactant_smiles.replace('[se]', '[Se]')
+                if '[se]' in product_smiles:
+                    product_smiles = product_smiles.replace('[se]', '[Se]')
 
-            # use pysmiles.read_smiles() to parse SMILES and get graph objects (in networkx format)
-            reactant_graph = pysmiles.read_smiles(reactant_smiles, zero_order_bonds=False)
-            product_graph = pysmiles.read_smiles(product_smiles, zero_order_bonds=False)
+                # use pysmiles.read_smiles() to parse SMILES and get graph objects (in networkx format)
+                reactant_graph = pysmiles.read_smiles(reactant_smiles, zero_order_bonds=False)
+                product_graph = pysmiles.read_smiles(product_smiles, zero_order_bonds=False)
 
-            if mode == 'train':
-                # store all values
-                for graph in [reactant_graph, product_graph]:
-                    for attr in attribute_names:
-                        for _, value in graph.nodes(data=attr):
-                            all_values[attr].add(value)
+                if mode == 'train':
+                    # store all values
+                    for graph in [reactant_graph, product_graph]:
+                        for attr in attribute_names:
+                            for _, value in graph.nodes(data=attr):
+                                all_values[attr].add(value)
 
-            graphs.append([reactant_graph, product_graph])
+                graphs.append([reactant_graph, product_graph])
+    else:
+        with open(path) as f:
+            for line in f.readlines():
+                idx, product_smiles, reactant_smiles, _ = line.strip().split(',')
+
+                # skip the first line
+                if len(idx) == 0:
+                    continue
+
+                if int(idx) % 10000 == 0:
+                    print('%dk' % (int(idx) // 1000))
+
+                # pysmiles.read_smiles() will raise a ValueError: "The atom [se] is malformatted" on USPTO-479k dataset.
+                # This is because "Se" is in a aromatic ring, so in USPTO-479k, "Se" is transformed to "se" to satisfy
+                # SMILES rules. But pysmiles does not treat "se" as a valid atom and raise a ValueError. To handle this
+                # case, I transform all "se" to "Se" in USPTO-479k.
+                if '[se]' in reactant_smiles:
+                    reactant_smiles = reactant_smiles.replace('[se]', '[Se]')
+                if '[se]' in product_smiles:
+                    product_smiles = product_smiles.replace('[se]', '[Se]')
+
+                # use pysmiles.read_smiles() to parse SMILES and get graph objects (in networkx format)
+                reactant_graph = pysmiles.read_smiles(reactant_smiles, zero_order_bonds=False)
+                product_graph = pysmiles.read_smiles(product_smiles, zero_order_bonds=False)
+
+                if mode == 'train':
+                    # store all values
+                    for graph in [reactant_graph, product_graph]:
+                        for attr in attribute_names:
+                            for _, value in graph.nodes(data=attr):
+                                all_values[attr].add(value)
+
+                graphs.append([reactant_graph, product_graph])
 
     if mode == 'train':
         return all_values, graphs
@@ -170,23 +210,37 @@ def preprocess(dataset):
 
 
 def load_data(args):
-    # if datasets are already cached, skip preprocessing
-    if os.path.exists('../data/' + args.dataset + '/cache/'):
-        path = '../data/' + args.dataset + '/cache/feature_encoder.pkl'
-        print('cache found\nloading feature encoder from %s' % path)
-        with open(path, 'rb') as f:
-            feature_encoder = pickle.load(f)
-        train_dataset = SmilesDataset(args, 'train')
-        valid_dataset = SmilesDataset(args, 'valid')
-        test_dataset = SmilesDataset(args, 'test')
-    else:
-        print('no cache found')
-        path = '../data/' + args.dataset + '/cache/'
-        print('creating directory: %s' % path)
-        os.mkdir(path)
-        feature_encoder, train_graphs, valid_graphs, test_graphs = preprocess(args.dataset)
-        train_dataset = SmilesDataset(args, 'train', feature_encoder, train_graphs)
-        valid_dataset = SmilesDataset(args, 'valid', feature_encoder, valid_graphs)
-        test_dataset = SmilesDataset(args, 'test', feature_encoder, test_graphs)
+    #Using only 50% of the training data
 
+    # if datasets are already cached, skip preprocessing
+    #if os.path.exists('../data/' + args.dataset + '/cache/'):
+    #    path = '../data/' + args.dataset + '/cache/feature_encoder.pkl'
+    #    print('cache found\nloading feature encoder from %s' % path)
+    #    with open(path, 'rb') as f:
+    #        feature_encoder = pickle.load(f)
+    #    train_dataset = SmilesDataset(args, 'train')
+    #    valid_dataset = SmilesDataset(args, 'valid')
+    #    test_dataset = SmilesDataset(args, 'test')
+    #else:
+    #    print('no cache found')
+    #    path = '../data/' + args.dataset + '/cache/'
+    #    print('creating directory: %s' % path)
+    #    os.mkdir(path)
+    #    feature_encoder, train_graphs, valid_graphs, test_graphs = preprocess(args.dataset)
+    #    train_dataset = SmilesDataset(args, 'train', feature_encoder, train_graphs)
+    #    valid_dataset = SmilesDataset(args, 'valid', feature_encoder, valid_graphs)
+    #    test_dataset = SmilesDataset(args, 'test', feature_encoder, test_graphs)
+    path = '../data/' + args.dataset + '/cache/feature_encoder.pkl'
+    with open(path, 'rb') as f:
+            feature_encoder = pickle.load(f)
+    #Using the code below to create dataset because of memory issues. generate the feature encoder by running the code above.
+    all_values, train_graphs = read_data(args.dataset, 'train')
+    train_dataset = SmilesDataset(args, 'train', feature_encoder, train_graphs)
+    del all_values, train_graphs, train_dataset
+    valid_graphs = read_data(args.dataset, 'valid')
+    valid_dataset = SmilesDataset(args, 'valid', feature_encoder, valid_graphs)
+    del valid_graphs, valid_dataset
+    test_graphs = read_data(args.dataset, 'test')
+    test_dataset = SmilesDataset(args, 'test', feature_encoder, test_graphs)
+    del test_graphs, test_dataset
     return feature_encoder, train_dataset, valid_dataset, test_dataset
